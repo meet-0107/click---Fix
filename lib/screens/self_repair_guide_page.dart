@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'dart:math' as math;
 import '../providers/auth_provider.dart';
 import '../services/firestore_service.dart';
 import '../services/llm_service.dart';
@@ -26,9 +25,6 @@ class _SelfRepairGuidePageState extends State<SelfRepairGuidePage> {
   bool _isGenerating = false;
   String? _generationError;
   bool _isInitialLoad = true;
-
-  // Track which step visualizer is active
-  int? _activeStepVisualizerIndex;
 
   @override
   void didChangeDependencies() {
@@ -114,7 +110,6 @@ class _SelfRepairGuidePageState extends State<SelfRepairGuidePage> {
       _steps = [];
       _ratingSubmitted = false;
       _guideRating = 0;
-      _activeStepVisualizerIndex = null;
     });
 
     try {
@@ -376,8 +371,6 @@ class _SelfRepairGuidePageState extends State<SelfRepairGuidePage> {
   }
 
   Widget _buildStepCard(int index, String text) {
-    final isExpanded = _activeStepVisualizerIndex == index;
-
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
@@ -388,45 +381,21 @@ class _SelfRepairGuidePageState extends State<SelfRepairGuidePage> {
       ),
       child: Padding(
         padding: const EdgeInsets.all(20.0),
-        child: Column(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 15,
-                  backgroundColor: Colors.blue.shade100,
-                  child: Text('${index + 1}', style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 14)),
-                ),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Text(
-                    text,
-                    style: const TextStyle(fontSize: 17, height: 1.5, color: Colors.black87),
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(
-                    isExpanded ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                    color: Colors.blue,
-                  ),
-                  tooltip: isExpanded ? "Hide Blueprint" : "Show 3D Blueprint",
-                  onPressed: () {
-                    setState(() {
-                      if (isExpanded) {
-                        _activeStepVisualizerIndex = null;
-                      } else {
-                        _activeStepVisualizerIndex = index;
-                      }
-                    });
-                  },
-                ),
-              ],
+            CircleAvatar(
+              radius: 15,
+              backgroundColor: Colors.blue.shade100,
+              child: Text('${index + 1}', style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 14)),
             ),
-            if (isExpanded) ...[
-              const Divider(height: 32),
-              Simulated3dHelper(stepIndex: index, stepText: text),
-            ],
+            const SizedBox(width: 20),
+            Expanded(
+              child: Text(
+                text,
+                style: const TextStyle(fontSize: 17, height: 1.5, color: Colors.black87),
+              ),
+            ),
           ],
         ),
       ),
@@ -462,308 +431,4 @@ class _SelfRepairGuidePageState extends State<SelfRepairGuidePage> {
       ),
     );
   }
-}
-
-class Simulated3dHelper extends StatefulWidget {
-  final int stepIndex;
-  final String stepText;
-
-  const Simulated3dHelper({
-    super.key,
-    required this.stepIndex,
-    required this.stepText,
-  });
-
-  @override
-  State<Simulated3dHelper> createState() => _Simulated3dHelperState();
-}
-
-class _Simulated3dHelperState extends State<Simulated3dHelper> {
-  double _rotationX = 0.5; // pitch
-  double _rotationY = 0.5; // yaw
-  
-  // Interactive states
-  int _screwsRemoved = 0;
-  bool _disconnected = false;
-  bool _wireRepaired = false;
-  bool _filterCleaned = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final int modelType = widget.stepIndex % 4;
-    String interactionStatus = "";
-    if (modelType == 0) {
-      interactionStatus = _disconnected ? "Status: Disconnected (Safe)" : "Status: Connected (Tap plug to disconnect)";
-    } else if (modelType == 1) {
-      interactionStatus = _screwsRemoved >= 4 ? "Status: Panel Open" : "Status: Screws removed: $_screwsRemoved/4 (Tap amber screws)";
-    } else if (modelType == 2) {
-      interactionStatus = _wireRepaired ? "Status: Wire Connected" : "Status: Loose connection detected (Tap glowing amber wire)";
-    } else if (modelType == 3) {
-      interactionStatus = _filterCleaned ? "Status: Filter Cleaned" : "Status: Blocked / Dirty (Tap filter core to clean)";
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(top: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F172A), // Slate 900
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.blue.shade900, width: 2),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.threed_rotation, color: Colors.cyan, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    "3D Interactive Blueprint",
-                    style: TextStyle(color: Colors.cyan, fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                ],
-              ),
-              Text(
-                interactionStatus,
-                style: TextStyle(color: Colors.cyan.shade200, fontSize: 12, fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          GestureDetector(
-            onPanUpdate: (details) {
-              setState(() {
-                _rotationY += details.delta.dx * 0.01;
-                _rotationX -= details.delta.dy * 0.01;
-              });
-            },
-            onTapDown: (details) {
-              // Handle simple clicks for interaction toggling
-              setState(() {
-                if (modelType == 0) {
-                  _disconnected = !_disconnected;
-                } else if (modelType == 1) {
-                  if (_screwsRemoved < 4) {
-                    _screwsRemoved++;
-                  } else {
-                    _screwsRemoved = 0;
-                  }
-                } else if (modelType == 2) {
-                  _wireRepaired = !_wireRepaired;
-                } else if (modelType == 3) {
-                  _filterCleaned = !_filterCleaned;
-                }
-              });
-            },
-            child: Container(
-              height: 200,
-              width: double.infinity,
-              color: Colors.transparent,
-              child: CustomPaint(
-                painter: Blueprint3dPainter(
-                  rotationX: _rotationX,
-                  rotationY: _rotationY,
-                  modelType: modelType,
-                  screwsRemoved: _screwsRemoved,
-                  disconnected: _disconnected,
-                  wireRepaired: _wireRepaired,
-                  filterCleaned: _filterCleaned,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            "Drag model to rotate. Tap anywhere on blueprint to simulate repair interactions.",
-            style: TextStyle(color: Colors.grey, fontSize: 11),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class Blueprint3dPainter extends CustomPainter {
-  final double rotationX;
-  final double rotationY;
-  final int modelType;
-  final int screwsRemoved;
-  final bool disconnected;
-  final bool wireRepaired;
-  final bool filterCleaned;
-
-  Blueprint3dPainter({
-    required this.rotationX,
-    required this.rotationY,
-    required this.modelType,
-    required this.screwsRemoved,
-    required this.disconnected,
-    required this.wireRepaired,
-    required this.filterCleaned,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final paintGrid = Paint()
-      ..color = Colors.blue.shade900.withOpacity(0.2)
-      ..strokeWidth = 1;
-
-    // Draw blueprint background grid
-    const spacing = 20.0;
-    for (double x = 0; x < size.width; x += spacing) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paintGrid);
-    }
-    for (double y = 0; y < size.height; y += spacing) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paintGrid);
-    }
-
-    final paintLine = Paint()
-      ..color = Colors.cyan.shade500
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-
-    final paintAccent = Paint()
-      ..color = Colors.amberAccent
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-
-    // Project points based on model type
-    if (modelType == 0) {
-      // Plug and Outlet wireframe
-      final double zShift = disconnected ? 40.0 : 0.0;
-
-      // Socket box (fixed)
-      _drawWireframeCube(canvas, center, 0, 0, 50, 60, 60, 20, rotationX, rotationY, paintLine);
-      // Socket holes
-      _drawWireframeCube(canvas, center, -15, 0, 40, 10, 20, 5, rotationX, rotationY, paintLine);
-      _drawWireframeCube(canvas, center, 15, 0, 40, 10, 20, 5, rotationX, rotationY, paintLine);
-
-      // Plug box (moving)
-      _drawWireframeCube(canvas, center, 0, 0, -10 - zShift, 45, 45, 30, rotationX, rotationY, disconnected ? paintAccent : paintLine);
-      // Prongs
-      _drawWireframeCube(canvas, center, -15, 0, 15 - zShift, 6, 6, 20, rotationX, rotationY, paintLine);
-      _drawWireframeCube(canvas, center, 15, 0, 15 - zShift, 6, 6, 20, rotationX, rotationY, paintLine);
-    } else if (modelType == 1) {
-      // Panel and Screws
-      // Draw frame cabinet
-      _drawWireframeCube(canvas, center, 0, 0, 0, 120, 120, 40, rotationX, rotationY, paintLine);
-      // Cover plate
-      _drawWireframeCube(canvas, center, 0, 0, 20, 100, 100, 2, rotationX, rotationY, screwsRemoved >= 4 ? paintAccent : paintLine);
-
-      // Draw screws (amber targets)
-      final List<List<double>> screwCoords = [
-        [-40.0, -40.0],
-        [40.0, -40.0],
-        [-40.0, 40.0],
-        [40.0, 40.0],
-      ];
-      for (int i = 0; i < 4; i++) {
-        if (i >= screwsRemoved) {
-          final coord = screwCoords[i];
-          _drawWireframeCube(canvas, center, coord[0], coord[1], 22, 10, 10, 10, rotationX, rotationY, paintAccent);
-        }
-      }
-    } else if (modelType == 2) {
-      // Circuit board & wire connection
-      _drawWireframeCube(canvas, center, 0, 0, 0, 140, 80, 5, rotationX, rotationY, paintLine);
-      // Capacitor cylinder
-      _drawWireframeCylinder(canvas, center, -35, 10, 15, 20, 30, rotationX, rotationY, paintLine);
-      // Chip board
-      _drawWireframeCube(canvas, center, 30, -10, 10, 40, 30, 8, rotationX, rotationY, paintLine);
-
-      // Loose wire (Accent)
-      _drawWireframeLine(canvas, center, -35, 25, 0, 10, -10, 10, rotationX, rotationY, wireRepaired ? paintLine : paintAccent);
-      _drawWireframeLine(canvas, center, 10, -10, 10, 30, -10, 10, rotationX, rotationY, paintLine);
-    } else {
-      // Cylinder / Mechanical filter
-      _drawWireframeCylinder(canvas, center, 0, 0, 0, 50, 100, rotationX, rotationY, filterCleaned ? paintLine : paintAccent);
-      // Inner mesh lines
-      _drawWireframeCylinder(canvas, center, 0, 0, 0, 30, 80, rotationX, rotationY, paintLine);
-    }
-  }
-
-  // Projection helper
-  Offset _project(double x, double y, double z, Offset center) {
-    // Rotate Y (yaw)
-    final x1 = x * math.cos(rotationY) - z * math.sin(rotationY);
-    final z1 = x * math.sin(rotationY) + z * math.cos(rotationY);
-    // Rotate X (pitch)
-    final y2 = y * math.cos(rotationX) - z1 * math.sin(rotationX);
-    final z2 = y * math.sin(rotationX) + z1 * math.cos(rotationX);
-
-    // Isometric perspective projection
-    const distance = 250.0;
-    final scale = 180.0 / (z2 + distance);
-    return Offset(
-      center.dx + x1 * scale,
-      center.dy + y2 * scale,
-    );
-  }
-
-  void _drawWireframeLine(Canvas canvas, Offset center, double x1, double y1, double z1, double x2, double y2, double z2, double rx, double ry, Paint paint) {
-    final p1 = _project(x1, y1, z1, center);
-    final p2 = _project(x2, y2, z2, center);
-    canvas.drawLine(p1, p2, paint);
-  }
-
-  void _drawWireframeCube(Canvas canvas, Offset center, double cx, double cy, double cz, double w, double h, double d, double rx, double ry, Paint paint) {
-    final hw = w / 2;
-    final hh = h / 2;
-    final hd = d / 2;
-
-    final verts = [
-      _project(cx - hw, cy - hh, cz - hd, center),
-      _project(cx + hw, cy - hh, cz - hd, center),
-      _project(cx + hw, cy + hh, cz - hd, center),
-      _project(cx - hw, cy + hh, cz - hd, center),
-      _project(cx - hw, cy - hh, cz + hd, center),
-      _project(cx + hw, cy - hh, cz + hd, center),
-      _project(cx + hw, cy + hh, cz + hd, center),
-      _project(cx - hw, cy + hh, cz + hd, center),
-    ];
-
-    // Draw front face edges
-    for (int i = 0; i < 4; i++) {
-      canvas.drawLine(verts[i], verts[(i + 1) % 4], paint);
-    }
-    // Draw back face edges
-    for (int i = 0; i < 4; i++) {
-      canvas.drawLine(verts[i + 4], verts[((i + 1) % 4) + 4], paint);
-    }
-    // Draw connecting edges
-    for (int i = 0; i < 4; i++) {
-      canvas.drawLine(verts[i], verts[i + 4], paint);
-    }
-  }
-
-  void _drawWireframeCylinder(Canvas canvas, Offset center, double cx, double cy, double cz, double radius, double height, double rx, double ry, Paint paint) {
-    final halfH = height / 2;
-    const segments = 12;
-    final List<Offset> topVerts = [];
-    final List<Offset> bottomVerts = [];
-
-    for (int i = 0; i < segments; i++) {
-      final angle = (i * 2 * math.pi) / segments;
-      final x = cx + radius * math.cos(angle);
-      final z = cz + radius * math.sin(angle);
-      topVerts.add(_project(x, cy - halfH, z, center));
-      bottomVerts.add(_project(x, cy + halfH, z, center));
-    }
-
-    // Draw cylinder edges
-    for (int i = 0; i < segments; i++) {
-      canvas.drawLine(topVerts[i], topVerts[(i + 1) % segments], paint);
-      canvas.drawLine(bottomVerts[i], bottomVerts[(i + 1) % segments], paint);
-      if (i % 2 == 0) {
-        canvas.drawLine(topVerts[i], bottomVerts[i], paint);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
