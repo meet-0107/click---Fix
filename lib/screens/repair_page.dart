@@ -15,6 +15,16 @@ class _RepairPageState extends State<RepairPage> {
   DeviceCategory? selectedCategory;
   RepairIssue? selectedIssue;
 
+  final TextEditingController _customApplianceController = TextEditingController();
+  final TextEditingController _customProblemController = TextEditingController();
+
+  @override
+  void dispose() {
+    _customApplianceController.dispose();
+    _customProblemController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -45,6 +55,53 @@ class _RepairPageState extends State<RepairPage> {
                 ),
                 const SizedBox(height: 40),
 
+                // AI Diagnostic Banner
+                GestureDetector(
+                  onTap: () => Navigator.pushNamed(context, '/ai_diagnostic'),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF0061FF), Colors.blueAccent],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF0061FF).withOpacity(0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.psychology_outlined, color: Colors.white, size: 36),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Try Visual Diagnostics",
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                "Take a picture of the control panel or error screen to diagnose instantly.",
+                                style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
                 // Main Selection Card
                 Card(
                   elevation: 8,
@@ -57,93 +114,77 @@ class _RepairPageState extends State<RepairPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // --- STEP 1: APPLIANCE ---
-                        const Text("1. Select your appliance",
+                        const Text("1. Enter your appliance",
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                         const SizedBox(height: 12),
-                        DropdownButtonFormField<DeviceCategory>(
-                          isExpanded: true,   //changes happen here
-                          decoration: _inputDecoration(selectedCategory?.icon ?? Icons.devices),
-                          hint: const Text('Choose Device (TV, AC, etc.)'),
-                          value: selectedCategory,
-                          onChanged: (DeviceCategory? newValue) {
-                            setState(() {
-                              selectedCategory = newValue;
-                              selectedIssue = null; // Reset issue when appliance changes
-                            });
-                          },
-                          // Mapping the List of Objects to DropdownMenuItems
-                          items: RepairData.categories.map((category) {
-                            return DropdownMenuItem<DeviceCategory>(
-                              value: category,
-                              child: Text(category.name),
-                            );
-                          }).toList(),
+                        TextField(
+                          controller: _customApplianceController,
+                          decoration: _inputDecoration(Icons.devices).copyWith(
+                            hintText: "e.g., Refrigerator, Washing Machine, Microwave",
+                          ),
                         ),
-
                         const SizedBox(height: 24),
-
-                        // --- STEP 2: ISSUE (Conditional) ---
-                        if (selectedCategory != null) ...[
-                          const Text("2. What is the problem?",
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          const SizedBox(height: 12),
-                          DropdownButtonFormField<RepairIssue>(
-                            isExpanded: true,  //changes happen here
-                            decoration: _inputDecoration(Icons.report_problem_outlined),
-                            hint: const Text('Select the issue'),
-                            value: selectedIssue,
-                            onChanged: (RepairIssue? newValue) {
-                              setState(() => selectedIssue = newValue);
-                            },
-                            // Mapping the sub-list of issues based on selected Category
-                            items: selectedCategory!.commonIssues.map((issue) {
-                              return DropdownMenuItem<RepairIssue>(
-                                value: issue,
-                                child: Text(issue.title),
-                              );
-                            }).toList(),
+                        const Text("2. Describe the issue",
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _customProblemController,
+                          decoration: _inputDecoration(Icons.report_problem_outlined).copyWith(
+                            hintText: "e.g., Not cooling, Leaking water, Not turning on",
                           ),
-                        ],
-
+                        ),
                         const SizedBox(height: 40),
-
+                        
                         // --- ACTION BUTTONS ---
-                        if (selectedIssue != null)
-                          Column(
-                            children: [
-                              _buildActionButton(
-                                label: 'View Self-Repair Guide',
-                                color: const Color(0xFF0061FF),
-                                isOutlined: false,
-                                onPressed: () => Navigator.pushNamed(
-                                  context,
-                                  '/self_repair_guide',
-                                  arguments: {
-                                    'appliance': selectedCategory!.name,
-                                    'issue': selectedIssue!.title,
-                                    'steps': selectedIssue!.diySteps, // Pass steps directly!
-                                  },
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              const Text("OR", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 16),
-                              _buildActionButton(
-                                label: 'Find a Nearby Technician',
-                                color: Colors.orange,
-                                isOutlined: true,
-                                onPressed: () => Navigator.pushNamed(
-                                  context,
-                                  '/technician_support',
-                                  arguments: {
-                                    'appliance': selectedCategory!.name,
-                                    'issue': selectedIssue!.title,
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
+                        _buildActionButton(
+                          label: 'View Self-Repair Guide',
+                          color: const Color(0xFF0061FF),
+                          isOutlined: false,
+                          onPressed: () {
+                            final appliance = _customApplianceController.text.trim();
+                            final problem = _customProblemController.text.trim();
+                            if (appliance.isEmpty || problem.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Please enter both appliance and problem'), backgroundColor: Colors.orange),
+                              );
+                              return;
+                            }
+                            Navigator.pushNamed(
+                              context,
+                              '/self_repair_guide',
+                              arguments: {
+                                'appliance': appliance,
+                                'issue': problem,
+                              },
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        const Center(child: Text("OR", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
+                        const SizedBox(height: 16),
+                        _buildActionButton(
+                          label: 'Find a Nearby Technician',
+                          color: Colors.orange,
+                          isOutlined: true,
+                          onPressed: () {
+                            final appliance = _customApplianceController.text.trim();
+                            final problem = _customProblemController.text.trim();
+                            if (appliance.isEmpty || problem.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Please enter both appliance and problem'), backgroundColor: Colors.orange),
+                                );
+                              return;
+                            }
+                            Navigator.pushNamed(
+                              context,
+                              '/technician_support',
+                              arguments: {
+                                'appliance': appliance,
+                                'issue': problem,
+                              },
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ),

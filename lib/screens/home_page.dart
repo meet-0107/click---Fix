@@ -170,7 +170,7 @@ class _HomePageState extends State<HomePage> {
                     if (isMobile)
                       Column(
                         children: [
-                          _buildFeatureCard(context, 'Diagnose Your Device', Icons.biotech_outlined, 'Identify issues in minutes.', isMobile, '/repair'),
+                          _buildFeatureCard(context, 'Diagnose Your Device', Icons.biotech_outlined, 'Identify issues in minutes.', isMobile, '/ai_diagnostic'),
                           const SizedBox(height: 16),
                           _buildFeatureCard(context, 'Connect with a Pro', Icons.engineering_outlined, 'Find verified local repair experts.', isMobile, '/technician_support'),
                           const SizedBox(height: 16),
@@ -185,7 +185,7 @@ class _HomePageState extends State<HomePage> {
                         runSpacing: 20,
                         alignment: WrapAlignment.center,
                         children: [
-                          _buildFeatureCard(context, 'Diagnose Your Device', Icons.biotech_outlined, 'Identify issues in minutes.', isMobile, '/repair'),
+                          _buildFeatureCard(context, 'Diagnose Your Device', Icons.biotech_outlined, 'Identify issues in minutes.', isMobile, '/ai_diagnostic'),
                           _buildFeatureCard(context, 'Connect with a Pro', Icons.engineering_outlined, 'Find verified local repair experts.', isMobile, '/technician_support'),
                           _buildFeatureCard(context, 'Track My Requests', Icons.history, 'Check status and leave reviews.', isMobile, '/user_requests'),
                           _buildFeatureCard(context, 'Step-by-Step Guides', Icons.menu_book_rounded, 'Access DIY manuals for fixes.', isMobile, '/repair'),
@@ -409,7 +409,7 @@ class _HomePageState extends State<HomePage> {
         child: InkWell(
           onTap: () {
             final role = Provider.of<AuthProvider>(context, listen: false).userRole;
-            if (role == 'user' || route == '/repair') {
+            if (role == 'user' || route == '/repair' || route == '/ai_diagnostic') {
                 Navigator.pushNamed(context, route);
             } else if (role == 'admin') {
                 Navigator.pushNamed(context, '/admin_dashboard');

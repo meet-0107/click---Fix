@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import 'services/firebase_config.dart';
 import 'providers/auth_provider.dart';
 
+import 'services/llm_config.dart';
+
 // Screens
 import 'screens/login_page.dart';
 import 'screens/home_page.dart';
@@ -17,6 +19,7 @@ import 'screens/user_requests_page.dart';
 import 'screens/register_page.dart';
 import 'screens/technician_register_page.dart';
 import 'screens/technician_profile_page.dart';
+import 'screens/ai_diagnostic_page.dart';
 
 // Admin Screens
 import 'screens/admin/admin_dashboard_page.dart';
@@ -28,6 +31,7 @@ import 'screens/admin/view_feedback_page.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeFirebase();
+  await LlmConfig.load();
   runApp(const MyApp());
 }
 
@@ -95,6 +99,7 @@ class MyApp extends StatelessWidget {
           '/admin_guides': (context) => const ManageGuidesPage(),
           '/admin_technicians': (context) => const ManageTechniciansPage(),
           '/admin_feedback': (context) => const ViewFeedbackPage(),
+          '/ai_diagnostic': (context) => const AiDiagnosticPage(),
         },
       ),
     );

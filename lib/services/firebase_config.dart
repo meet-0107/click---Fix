@@ -8,7 +8,7 @@ Future<void> initializeFirebase() async {
   if (kIsWeb) {
     await Firebase.initializeApp(
       options: const FirebaseOptions(
-        apiKey: "your_api_keys_here",
+        apiKey: "AIzaSyC_MnrYvwCDHgMNcTKEJeJrrEL7iVkYdAU",
         authDomain: "click-fix-86629.firebaseapp.com",
         projectId: "click-fix-86629",
         storageBucket: "click-fix-86629.firebasestorage.app",

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/firestore_service.dart';
+import '../services/llm_service.dart';
 import '../widgets/navigation_bar.dart';
 import '../widgets/app_drawer.dart';
 
@@ -18,17 +19,36 @@ class _SelfRepairGuidePageState extends State<SelfRepairGuidePage> {
   int _guideRating = 0;
   bool _ratingSubmitted = false;
 
+  String _applianceName = '';
+  String _issueTitle = '';
+  List<String> _steps = [];
+  bool _isGenerating = false;
+  String? _generationError;
+  bool _isInitialLoad = true;
+
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkBookmark());
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_isInitialLoad) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      if (args != null) {
+        _applianceName = args['appliance'] ?? '';
+        _issueTitle = args['issue'] ?? '';
+        
+        if (_applianceName.isNotEmpty && _issueTitle.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _generateGuide();
+          });
+        }
+      }
+      _isInitialLoad = false;
+    }
   }
 
   void _checkBookmark() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    if (authProvider.user != null && args != null) {
-      final guideKey = '${args['appliance']}_${args['issue']}';
+    if (authProvider.user != null && _applianceName.isNotEmpty && _issueTitle.isNotEmpty) {
+      final guideKey = '${_applianceName}_$_issueTitle';
       final result = await _firestoreService.isBookmarked(authProvider.user!.uid, guideKey);
       if (mounted) setState(() => _isBookmarked = result);
     }
@@ -36,14 +56,19 @@ class _SelfRepairGuidePageState extends State<SelfRepairGuidePage> {
 
   void _toggleBookmark() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     if (authProvider.user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please login to bookmark guides'), backgroundColor: Colors.orange),
       );
       return;
     }
-    final guideKey = '${args?['appliance']}_${args?['issue']}';
+    if (_applianceName.isEmpty || _issueTitle.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a guide first to bookmark'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+    final guideKey = '${_applianceName}_$_issueTitle';
     if (_isBookmarked) {
       await _firestoreService.removeBookmark(authProvider.user!.uid, guideKey);
     } else {
@@ -55,13 +80,12 @@ class _SelfRepairGuidePageState extends State<SelfRepairGuidePage> {
   void _submitGuideRating() async {
     if (_guideRating == 0) return;
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     try {
       await _firestoreService.submitFeedback({
         'userId': authProvider.user?.uid ?? '',
         'userName': authProvider.user?.displayName ?? 'Anonymous',
         'technicianId': 'guide',
-        'technicianName': '${args?['appliance']} - ${args?['issue']} Guide',
+        'technicianName': '$_applianceName - $_issueTitle Guide',
         'rating': _guideRating,
         'comment': 'Guide rating',
         'type': 'guide_rating',
@@ -77,18 +101,34 @@ class _SelfRepairGuidePageState extends State<SelfRepairGuidePage> {
     }
   }
 
+  void _generateGuide() async {
+    if (_applianceName.isEmpty || _issueTitle.isEmpty) return;
+
+    setState(() {
+      _isGenerating = true;
+      _generationError = null;
+      _steps = [];
+      _ratingSubmitted = false;
+      _guideRating = 0;
+    });
+
+    try {
+      final generatedSteps = await LlmService.generateGuide(_applianceName, _issueTitle);
+      setState(() {
+        _steps = generatedSteps;
+        _isGenerating = false;
+      });
+      _checkBookmark();
+    } catch (e) {
+      setState(() {
+        _generationError = "Failed to generate instructions.\nDetails: $e";
+        _isGenerating = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final route = ModalRoute.of(context);
-    final Map<String, dynamic>? args = route?.settings.arguments as Map<String, dynamic>?;
-
-    if (args == null) {
-      return const Scaffold(body: Center(child: Text("Error: No data provided")));
-    }
-
-    final String applianceName = args['appliance'];
-    final List<String> steps = args['steps'];
-
     return Scaffold(
       drawer: const AppDrawer(),
       backgroundColor: Colors.white,
@@ -104,43 +144,53 @@ class _SelfRepairGuidePageState extends State<SelfRepairGuidePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Title + Bookmark
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: _buildHeader(applianceName, args['issue'])),
-                    IconButton(
-                      onPressed: _toggleBookmark,
-                      icon: Icon(
-                        _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                        color: _isBookmarked ? Colors.blue : Colors.grey,
-                        size: 32,
+                if (_isGenerating) _buildGeneratingPlaceholder(),
+                if (_generationError != null) _buildErrorContainer(),
+
+                if (!_isGenerating && _steps.isNotEmpty) ...[
+                  // Title + Bookmark header
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _buildHeader(_applianceName, _issueTitle),
                       ),
-                      tooltip: _isBookmarked ? 'Remove Bookmark' : 'Save Guide',
-                    ),
-                  ],
-                ),
+                      IconButton(
+                        onPressed: _toggleBookmark,
+                        icon: Icon(
+                          _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                          color: _isBookmarked ? Colors.blue : Colors.grey,
+                          size: 32,
+                        ),
+                        tooltip: _isBookmarked ? 'Remove Bookmark' : 'Save Guide',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  _buildSafetyWarning(),
+                  const SizedBox(height: 32),
+
+                  const Text('Preparation', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
+                  _buildToolList(const ['Standard Screwdriver', 'Flashlight', 'Dry Cloth']),
+                  const SizedBox(height: 32),
+
+                  const Text('Instructions', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+                  const SizedBox(height: 16),
+                  ..._steps.asMap().entries.map((entry) => _buildStepCard(entry.key, entry.value)),
+
+                  const SizedBox(height: 32),
+
+                  // Rate this guide
+                  _buildGuideRatingSection(),
+                  const SizedBox(height: 48),
+                ],
+
+                if (!_isGenerating && _steps.isEmpty && _generationError == null)
+                  _buildEmptyStatePlaceholder(),
+
                 const SizedBox(height: 24),
-
-                _buildSafetyWarning(),
-                const SizedBox(height: 32),
-
-                const Text('Preparation', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-                _buildToolList(['Standard Screwdriver', 'Flashlight', 'Dry Cloth']),
-                const SizedBox(height: 32),
-
-                const Text('Step-by-Step Instructions', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-                ...steps.asMap().entries.map((entry) => _buildStepCard(entry.key, entry.value)),
-
-                const SizedBox(height: 32),
-
-                // Rate this guide
-                _buildGuideRatingSection(),
-
-                const SizedBox(height: 48),
-
                 _buildContactProBanner(context),
               ],
             ),
@@ -150,12 +200,84 @@ class _SelfRepairGuidePageState extends State<SelfRepairGuidePage> {
     );
   }
 
+  Widget _buildGeneratingPlaceholder() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40.0),
+        child: Column(
+          children: [
+            const CircularProgressIndicator(color: Colors.blue),
+            const SizedBox(height: 20),
+            Text(
+              "Preparing guide for '$_applianceName'...",
+              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "Preparing custom step-by-step DIY instructions.",
+              style: TextStyle(color: Colors.grey),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyStatePlaceholder() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 60.0),
+        child: Column(
+          children: [
+            Icon(Icons.build_circle_outlined, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            const Text(
+              "No Guide Loaded",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "Please select a device and problem from the repair page first.",
+              style: TextStyle(color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorContainer() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red.shade100),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: Colors.red),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _generationError!,
+              style: TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildGuideRatingSection() {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.blue.shade50,
+        color: Colors.blue.shade50.withOpacity(0.3),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.blue.shade100.withOpacity(0.5)),
       ),
       child: Column(
         children: [
@@ -206,7 +328,7 @@ class _SelfRepairGuidePageState extends State<SelfRepairGuidePage> {
         const SizedBox(height: 8),
         Text(
           'Fixing: $issue',
-          style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, height: 1.1),
+          style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, height: 1.1),
         ),
       ],
     );
@@ -294,7 +416,10 @@ class _SelfRepairGuidePageState extends State<SelfRepairGuidePage> {
           const Text("Some repairs require specialized equipment. Connect with a certified technician nearby.", textAlign: TextAlign.center),
           const SizedBox(height: 24),
           ElevatedButton(
-            onPressed: () => Navigator.pushNamed(context, '/technician_support'),
+            onPressed: () => Navigator.pushNamed(context, '/technician_support', arguments: {
+              'appliance': _applianceName.isNotEmpty ? _applianceName : 'Appliance',
+              'issue': _issueTitle.isNotEmpty ? _issueTitle : 'Issue',
+            }),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.orange.shade800,
               foregroundColor: Colors.white,
