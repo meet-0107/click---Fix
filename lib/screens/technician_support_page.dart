@@ -5,6 +5,9 @@ import '../providers/auth_provider.dart';
 import '../services/firestore_service.dart';
 import '../widgets/navigation_bar.dart';
 import '../widgets/app_drawer.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import '../services/geocoding_service.dart';
 
 class TechnicianSupportPage extends StatefulWidget {
   const TechnicianSupportPage({super.key});
@@ -21,15 +24,42 @@ class _TechnicianSupportPageState extends State<TechnicianSupportPage> {
   String? _selectedTechId;
   String? _selectedTechName;
   bool _showTechnicians = false;
+  
+  final MapController _mapController = MapController();
+  LatLng? _searchCenter;
+  bool _isLoadingMap = false;
 
-  void _searchTechnicians() {
+  void _searchTechnicians() async {
     if (_pincodeController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter your pincode first'), backgroundColor: Colors.orange),
       );
       return;
     }
-    setState(() => _showTechnicians = true);
+    
+    setState(() {
+      _showTechnicians = true;
+      _isLoadingMap = true;
+    });
+
+    final center = await GeocodingService.getCoordinatesFromPincode(_pincodeController.text.trim());
+    if (mounted) {
+      setState(() {
+        _searchCenter = center;
+        _isLoadingMap = false;
+      });
+      if (center != null) {
+        // We move the map once the widget is built. 
+        // Using addPostFrameCallback ensures the map layout is complete.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          try {
+            _mapController.move(center, 13.0);
+          } catch (e) {
+            // Controller might not be ready on first build
+          }
+        });
+      }
+    }
   }
 
   void _submitRequest(String appliance, String issue) async {
@@ -243,6 +273,61 @@ class _TechnicianSupportPageState extends State<TechnicianSupportPage> {
                             ],
                           ),
                           const SizedBox(height: 12),
+                          
+                          // Map View
+                          if (_isLoadingMap)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 20),
+                              child: Center(child: CircularProgressIndicator()),
+                            )
+                          else if (_searchCenter != null) ...[
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                // Ensure we have a strictly positive finite size
+                                final width = constraints.maxWidth.isFinite && constraints.maxWidth > 0 
+                                    ? constraints.maxWidth 
+                                    : 400.0;
+                                return Container(
+                                  height: 250,
+                                  width: width,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.grey.shade300),
+                                  ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: FlutterMap(
+                                    mapController: _mapController,
+                                    options: MapOptions(
+                                      initialCenter: _searchCenter!,
+                                      initialZoom: 13.0,
+                                      interactionOptions: const InteractionOptions(
+                                        flags: InteractiveFlag.all,
+                                      ),
+                                    ),
+                                    children: [
+                                      TileLayer(
+                                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                        userAgentPackageName: 'com.clickandfix.app',
+                                      ),
+                                      MarkerLayer(
+                                        markers: [
+                                          Marker(
+                                            point: _searchCenter!,
+                                            width: 80,
+                                            height: 80,
+                                            child: const Icon(Icons.location_on, color: Colors.blue, size: 40),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            Text('Technicians available near this area:', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                            const SizedBox(height: 8),
+                          ],
                           StreamBuilder<QuerySnapshot>(
                             stream: _firestoreService.getTechniciansBySpecialtyAndPincode(
                               appliance,
